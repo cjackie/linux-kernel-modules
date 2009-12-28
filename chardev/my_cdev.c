@@ -13,6 +13,7 @@ MODULE_AUTHOR("Chaojie Wang");
 MODULE_DESCRIPTION("playing around with kernel");
 
 static struct cj_cdev *my_cj_cdev;
+const char *mod_name = "cj_cdev";
 
 static int d_open(struct inode *inode, struct file *filp) 
 {
@@ -44,7 +45,7 @@ static ssize_t d_write(struct file *filp, const char __user *buf, size_t len, lo
 
 static long d_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
-	// TODO;
+	// TODO
 	printk(KERN_INFO "ioctl is invoked\n");
 	return 0;
 }
@@ -69,7 +70,7 @@ static int __init my_cdev_setup(void)
 	int dsize;
 	char *cj_list_data = NULL;
 
-	if ((ret = alloc_chrdev_region(&dev, 0, 1, "cj_cdev")) != 0) {
+	if ((ret = alloc_chrdev_region(&dev, 0, 1, mod_name)) != 0) {
 		printk(KERN_ERR "error code %d when allocating chrdev\n", ret);
 		goto error;
 	}
@@ -132,6 +133,7 @@ static void __exit my_cdev_cleanup(void)
 		next = l_ptr->next;
 		kfree(l_ptr);
 	}
+	unregister_chrdev_region(my_cj_cdev->lcdev.dev, 1);
 	kfree(my_cj_cdev);
 	printk(KERN_INFO "free and exiting\n");
 	return;
