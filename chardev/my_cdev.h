@@ -6,14 +6,14 @@ struct cj_list {
 	long dsize;              /* max size of the data */
 	long cdsize;             /* space that has been filled up */
 	char *data;              /* data pointer */
-}
+};
 
 struct cj_cdev {
 	struct cj_list *head;     /* link list */
 	long lsize;               /* number of elements in the list */
 	long dsize;               /* max size of the data content in each list */
 	struct semaphore sem;     /* mutual exclusion semaphore     */
-	struct cdev cdev;         /* Char device structure      */
-}
+	struct cdev lcdev;         /* Char device structure      */
+};
 
 #endif /* MY_CDEV_H */
