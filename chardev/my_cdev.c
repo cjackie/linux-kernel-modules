@@ -17,30 +17,35 @@ static struct cj_cdev *my_cj_cdev;
 static int d_open(struct inode *inode, struct file *filp) 
 {
 	// TODO
+	printk(KERN_INFO "open is invoked\n");
 	return 0;
 }
 
 static int d_release(struct inode *inode, struct file *filp)
 {
 	// TODO
+	printk(KERN_INFO "release is invoked\n");
 	return 0;
 }
 
 static ssize_t d_read(struct file *filp, char __user *buf, size_t len, loff_t *pos)
 {
 	// TODO
+	printk(KERN_INFO "read is invoked\n");
 	return 0;
 }
 
 static ssize_t d_write(struct file *filp, const char __user *buf, size_t len, loff_t *pos)
 {
 	// TODO
+	printk(KERN_INFO "write is invoked\n");
 	return 0;
 }
 
 static long d_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	// TODO;
+	printk(KERN_INFO "ioctl is invoked\n");
 	return 0;
 }
 
