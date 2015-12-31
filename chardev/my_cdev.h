@@ -10,10 +10,10 @@ struct cj_list {
 
 struct cj_cdev {
 	struct cj_list *head;     /* link list */
-	long lsize;               /* number of elements in the list */
 	long dsize;               /* max size of the data content in each list */
+	long total_size;          /* total data in memory */
 	struct semaphore sem;     /* mutual exclusion semaphore     */
-	struct cdev lcdev;         /* Char device structure      */
+	struct cdev cdev;         /* Char device structure      */
 };
 
 #endif /* MY_CDEV_H */
