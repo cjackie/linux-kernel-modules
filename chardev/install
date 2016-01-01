@@ -1,15 +1,14 @@
 #!/bin/sh
 
-module_fn="my_cdev"
-module_name="cj_cdev"
+module="cj_cdev"
 device="cj"
 mode="664"
 
 # install the module
-insmod ./${module_fn}.ko 
+insmod ./${module}.ko 
 
 # find out the major number
-major=$(awk "\$2 == \"${module_name}\" {print \$1}" /proc/devices)
+major=$(awk "\$2 == \"${module}\" {print \$1}" /proc/devices)
 
 # create devices
 mknod /dev/${device} c ${major} 0

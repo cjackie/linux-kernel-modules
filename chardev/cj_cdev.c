@@ -8,9 +8,8 @@
 #include <linux/string.h>
 #include <linux/moduleparam.h>
 #include <linux/syscalls.h>
-#include <fcntl.h>
-#include "my_cdev.h"
-#include "my_cdev_user.h"
+#include "cj_cdev.h"
+#include "cj_cdev_user.h"
 
 MODULE_LICENSE("MIT");
 MODULE_AUTHOR("Chaojie Wang");
@@ -18,7 +17,6 @@ MODULE_DESCRIPTION("playing around with kernel");
 
 static struct cj_cdev *my_cj_cdev;
 static const char *mod_name = "cj_cdev";
-static struct file *dout_filp = NULL;
 
 static int d_open(struct inode *inode, struct file *filp) 
 {
@@ -44,10 +42,10 @@ static loff_t d_llseek(struct file *filp, loff_t pos, int whence)
 	printk(KERN_INFO "llseek is invoked\n");
 
 	struct cj_cdev *cj_cdev_l = filp->private_data;
-	total_size = cj_dev->total_size;
+	long total_size = cj_cdev_l->total_size;
 	long f_pos = (long) pos + whence;
 	if (total_size < f_pos) {
-		flip->f_pos = f_pos;
+		filp->f_pos = f_pos;
 	} else {
 		printk(KERN_ERR "seeking a invalid position\n");
 		return -1;
@@ -108,7 +106,7 @@ static ssize_t d_write(struct file *filp, const char __user *buf, size_t len, lo
 	char *user_data = kmalloc(sizeof(char *)*len, GFP_KERNEL);
 	unsigned n_write = 0;
 	if (!user_data) {
-		printk(KERN_ERR "no enough space for allocating %d amount\n", len);
+		printk(KERN_ERR "no enough space for allocating %d amount\n", (int)len);
 		goto out;
 	}
 
@@ -118,10 +116,10 @@ static ssize_t d_write(struct file *filp, const char __user *buf, size_t len, lo
 	}
 
 	// get the first ptr that can be written
-	struct cj_cdev *my_cdev_l = filp->private_data;
-	long total_size = my_cdev_l->total_size;
-	long dsize = my_cdev_l->dsize;
-	struct cj_list *lptr = my_cdev_l->head;
+	struct cj_cdev *cj_cdev_l = filp->private_data;
+	long total_size = cj_cdev_l->total_size;
+	long dsize = cj_cdev_l->dsize;
+	struct cj_list *lptr = cj_cdev_l->head;
 	unsigned long cur_pos = *pos;
 	while (cur_pos >= dsize) {
 		lptr = lptr->next;
@@ -146,18 +144,21 @@ static ssize_t d_write(struct file *filp, const char __user *buf, size_t len, lo
 				printk(KERN_ERR "can't allocate new cj_list\n");
 				goto out;
 			}
-			memset(new_elm, 0, sizeof(stuct cj_list));
+			memset(new_elm, 0, sizeof(struct cj_list));
 			new_elm->dsize = dsize;
 			new_elm->next = NULL;
 			lptr->next = new_elm;
 			lptr = new_elm;
+			cur_pos = 0;
 		}
 		// copy over data, one char at a time
-		lptr->data[cur_pos++] = user_data[offset++];
+		lptr->data[cur_pos] = user_data[offset];
 		if (cur_pos == lptr->cdsize) {
 			lptr->cdsize += 1;
 			++advance_cursor;
 		}
+		++cur_pos;
+		++offset;
 		++n_write;
 		--len;
 	}
@@ -165,45 +166,42 @@ static ssize_t d_write(struct file *filp, const char __user *buf, size_t len, lo
 out:
 	kfree(user_data);
 	*pos += n_write;
-	my_cdev_l->total_size += advance_cursor;
-	up(&my_cdev_l->sem);
+	cj_cdev_l->total_size += advance_cursor;
+	up(&cj_cdev_l->sem);
 	return n_write;
 }
 
 static long d_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	printk(KERN_INFO "ioctl is invoked\n");
-	ret = 0;
-	if (!IS_ERR_OR_NULL(dout_filp)) {
-		printk(KERN_ERR "dout_filp is not valid\n");
-		ret = -1;
-	} else {
-		struct cj_cdev *cj_cdev_l = filp->private_data;
-		struct cj_list *lptr = NULL;
-		struct cj_list *next = NULL;
-		switch (cmd) {
-		case CLEANUP_CMD:
-			// clean up the buffer in memory, and restore to the initial state
-			for (lptr = cj_cdev_l->head->next; !lptr; lptr = next) {
-				kfree(lptr->data);
-				next = lptr->next;
-				kfree(lptr);
-			}
-			cj_cdev_l->head->cdsize = 0;
-			cj_cdev_l->head->next = NULL;
-			memset(cj_cdev_l->head->data, 0, cj_cdev_l->dsize);
-			cj_cdev_l->total_size = 0;
-			break;
-		case PRINT_CMD:
-			// print relevent data to a console
-			// TODO write to filp?
-			break;
-		default:
-			ret = -1;
-			break;
+
+	int ret = 0;
+	struct cj_cdev *cj_cdev_l = filp->private_data;
+	struct cj_list *lptr = NULL;
+	struct cj_list *next = NULL;
+	switch (cmd) {
+	case CLEANUP_CMD:
+		// clean up the buffer in memory, and restore to the initial state
+		for (lptr = cj_cdev_l->head->next; !lptr; lptr = next) {
+			kfree(lptr->data);
+			next = lptr->next;
+			kfree(lptr);
 		}
+		cj_cdev_l->head->cdsize = 0;
+		cj_cdev_l->head->next = NULL;
+		memset(cj_cdev_l->head->data, 0, cj_cdev_l->dsize);
+		cj_cdev_l->total_size = 0;
+		break;
+	case PRINT_CMD:
+		// print relevent data to a console
+		// TODO write to filp?
+		break;
+	default:
+		ret = -1;
+		break;
 	}
-	return 0;
+
+	return ret;
 }
 
 static const struct file_operations cj_cdev_op = {
@@ -226,7 +224,6 @@ static int __init my_cdev_setup(void)
 	struct cdev *my_cdev = NULL;
 	int dsize;
 	char *cj_list_data = NULL;
-	char *fpath = NULL;
 
 	if ((ret = alloc_chrdev_region(&dev, 0, 1, mod_name)) != 0) {
 		printk(KERN_ERR "error code %d when allocating chrdev\n", ret);
@@ -267,18 +264,6 @@ static int __init my_cdev_setup(void)
 	my_cj_cdev->head->dsize = dsize;
 	my_cj_cdev->head->cdsize = 0;
 	my_cj_cdev->head->data = cj_list_data;
-
-	// get the path to a file that will be our printing channel for debugging
-	module_param(fpath, charp, S_IRUGO|S_IWUSR);
-	if (!charp) {
-		printk(KERN_ERR "param is null?\n");
-	} else {
-		dout_filp = filp_open(fpath, O_WRONLY, 0);
-		if (IS_ERR_OR_NULL(dout_filp)) {
-			printk(KERN_ALERT "can't open %s\n", fpath);
-			goto error;
-		}
-	}
 	
 	return ret;
 error:
