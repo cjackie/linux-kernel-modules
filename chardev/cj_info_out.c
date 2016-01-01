@@ -58,7 +58,7 @@ int main(int argc, const char* argv[]) {
   };
 
   // obtaining data and printing it out
-  ioctl(dev_fd, CJ_READ_CMD, &buf);
+  ioctl(dev_fd, CJ_READ, &buf);
   if (!ret) {
     printf("there is an error when getting the data\n");
   }
