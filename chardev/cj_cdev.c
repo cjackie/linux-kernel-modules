@@ -81,17 +81,22 @@ static ssize_t d_read(struct file *filp, char __user *buf, size_t len, loff_t *p
 		ret = -1;
 		goto out2;
 	}
+
 	// go to the first elm in the list where it can be read
 	while (!lptr && relative_pos >= dsize) {
-		remain_space -= lptr->cdsize;
-		relative_pos -= lptr->cdsize;
+		remain_space -= dsize;
+		relative_pos -= dsize;
 		lptr = lptr->next;
 	}
+	// go to the relative position in that elm
+	remain_space -= (relative_pos+1);
+	remain_space = remain_space > 0 ? remain_space : 0;
+	relative_pos = 0;
 	
 	// copy all variable data to the user. one element at a time
 	while (len && remain_space) {
 		// copy the data to the user space
-		long chuck_len = lptr->cdsize-relative_pos > len ? lptr->cdsize-relative_pos : len;
+		long chuck_len = lptr->cdsize-relative_pos < len ? lptr->cdsize-relative_pos : len;
 		if (copy_to_user(buf, lptr->data + sizeof(char *)*relative_pos, chuck_len)) {
 			printk(KERN_ERR "error when copying to user\n");
 			n_read = -1;
@@ -101,7 +106,15 @@ static ssize_t d_read(struct file *filp, char __user *buf, size_t len, loff_t *p
 		remain_space -= chuck_len;
 		len -= chuck_len;
 		relative_pos = chuck_len + relative_pos >= dsize ? 0 : chuck_len + relative_pos;
-		lptr = lptr->next;
+		lptr = relative_pos == 0 ? lptr->next : lptr;
+#ifdef DEBUG
+		if (len < 0 || remain_space < 0) {
+			printk(KERN_ERR "len or remain_space is invalid. len is %li, remain_space is %li\n",
+			       len, remain_space);
+			n_read = -1;
+			goto out;
+		}
+#endif
 	}
 	
 out:
