@@ -32,7 +32,7 @@ static int d_open(struct inode *inode, struct file *filp)
 
 static int d_release(struct inode *inode, struct file *filp)
 {
-	// Nothing need to be done
+	// Nothing need to be done here
 	printk(KERN_INFO "release is invoked\n");
 	return 0;
 }
@@ -43,7 +43,7 @@ static loff_t d_llseek(struct file *filp, loff_t pos, int whence)
 
 	struct cj_cdev *cj_cdev_l = filp->private_data;
 	long total_size = cj_cdev_l->total_size;
-	long f_pos = (long) pos + whence;
+	long f_pos = pos + whence;
 	if (total_size < f_pos) {
 		filp->f_pos = f_pos;
 	} else {
@@ -79,15 +79,16 @@ static ssize_t d_read(struct file *filp, char __user *buf, size_t len, loff_t *p
 	// copy all variable data to the user. one element at a time
 	while (len && remain_space) {
 		// copy the data to the user space
-		long chuck_len = dsize-relative_pos > len ? dsize-relative_pos : len;
+		long chuck_len = lptr->cdsize-relative_pos > len ? lptr->cdsize-relative_pos : len;
 		if (copy_to_user(buf, lptr->data + sizeof(char *)*relative_pos, chuck_len)) {
 			printk(KERN_ERR "error when copying to user\n");
 			n_read = -1;
 			goto out;
 		}
+		n_read += chuck_len;
 		remain_space -= chuck_len;
 		len -= chuck_len;
-		relative_pos = 0;
+		relative_pos = chuck_len + relative_pos >= dsize ? 0 : check_len + relative_pos;
 		lptr = lptr->next;
 	}
 	
@@ -103,22 +104,56 @@ static ssize_t d_write(struct file *filp, const char __user *buf, size_t len, lo
 	printk(KERN_INFO "write is invoked\n");
 	
 	// copy the data from user space
-	char *user_data = kmalloc(sizeof(char *)*len, GFP_KERNEL);
-	unsigned n_write = 0;
+	char *user_data = kmalloc(sizeof(char)*len, GFP_KERNEL);
+	unsigned long n_write = 0;
+
 	if (!user_data) {
 		printk(KERN_ERR "no enough space for allocating %d amount\n", (int)len);
-		goto out;
+		goto out2;
 	}
 
 	if (copy_from_user(user_data, buf, len)) {
 		printk(KERN_ERR "error when getting the data from the user");
-		goto out;
+		goto out2;
 	}
 
-	// get the first ptr that can be written
 	struct cj_cdev *cj_cdev_l = filp->private_data;
 	long total_size = cj_cdev_l->total_size;
 	long dsize = cj_cdev_l->dsize;
+
+	// allocate extra space if needed
+	long n_elm_now = total_size/dsize + 1;
+	long n_elm_needed = (*pos + len) / dsize + 1;
+	struct cj_list **alloc_elms;
+	long alloc_len = 0;
+	if (n_elm_needed - n_elm_now > 0) {
+		int alloc_total = n_elm_needed - n_elm_now;
+		*alloc_elms = kmalloc(sizeof(struct cj_list *)*alloc_total, GFP_KERNEL);
+		if (!alloc_elms) {
+			printk(KERN_ERR "no space for allocating array of cj_list*\n");
+			goto out3;
+		}
+		int i;
+		char *data_tmp;
+		for (i = 0; i < alloc_total; ++i) {
+			alloc_elms[i] = kmalloc(sizeof(struct cj_list), GFP_KERNEL);
+			if (!alloc_elms[i]) {
+				printk(KERN_ERR "no space for new cj_list\n");
+				goto out3;
+			}
+			data_tmp = kmalloc(sizeof(char)*dsize, GFP_KERNEL);
+			if (!data_tmp) {
+				kfree(alloc_elms[i]);
+				printk(KERN_ERR "no space for data\n");
+				goto out3;
+			}
+			alloc_elms[i]->data = data_tmp;
+			++alloc_len;
+		}
+	}
+	
+
+	// get the first ptr that can be written
 	struct cj_list *lptr = cj_cdev_l->head;
 	unsigned long cur_pos = *pos;
 	while (cur_pos >= dsize) {
@@ -129,26 +164,29 @@ static ssize_t d_write(struct file *filp, const char __user *buf, size_t len, lo
 	// lock the sema
 	if (down_interruptible(&cj_cdev_l->sem)) {
 		printk(KERN_ERR "interrupted when acquiring the lock(write)\n");
-		return -1;
+		goto out3;
 	}
 
-	// copying a char at a time to our memory
+	// copying a char at a time to kernel space memory
 	unsigned long offset = 0;
 	unsigned advance_cursor = 0;
+	unsigned long elm_avail_i = 0;
 	while (len) {
 		// if end of the current chuck
 		if (cur_pos == dsize) {
-			struct cj_list *new_elm = NULL;
-			new_elm = kmalloc(sizeof(struct cj_list), GFP_KERNEL);
-			if (!new_elm) {
-				printk(KERN_ERR "can't allocate new cj_list\n");
-				goto out;
+			if (!lptr->next) {
+				// It is end of the buffer. introduce a new elm
+				struct cj_list *new_elm = alloc_elms[elm_avail_i++];
+				new_elm->next = NULL;
+				new_elm->dsize = dsize;
+				new_elm->cdsize = 0;
+				memset(new_elm->data, 0, dsize);
+
+				lptr->next = new_elm;
+				lptr = new_elm;
+			} else {
+				lptr = lptr->next;
 			}
-			memset(new_elm, 0, sizeof(struct cj_list));
-			new_elm->dsize = dsize;
-			new_elm->next = NULL;
-			lptr->next = new_elm;
-			lptr = new_elm;
 			cur_pos = 0;
 		}
 		// copy over data, one char at a time
@@ -162,13 +200,26 @@ static ssize_t d_write(struct file *filp, const char __user *buf, size_t len, lo
 		++n_write;
 		--len;
 	}
-
-out:
+	
+	// exiting
 	kfree(user_data);
 	*pos += n_write;
 	cj_cdev_l->total_size += advance_cursor;
 	up(&cj_cdev_l->sem);
 	return n_write;
+
+out2:
+	kfree(user_data);
+	return -1;
+
+out3:
+	kfree(user_data);
+	int i;
+	for (i = 0; i < alloc_len; ++i) {
+		kfree(alloc_elms[i]->data);
+		kfree(alloc_elms[i]);
+	}
+	return -1;
 }
 
 static long d_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
@@ -180,7 +231,7 @@ static long d_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	struct cj_list *lptr = NULL;
 	struct cj_list *next = NULL;
 	switch (cmd) {
-	case CLEANUP_CMD:
+	case CJ_CLEANUP_CMD:
 		// clean up the buffer in memory, and restore to the initial state
 		for (lptr = cj_cdev_l->head->next; !lptr; lptr = next) {
 			kfree(lptr->data);
@@ -191,10 +242,11 @@ static long d_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		cj_cdev_l->head->next = NULL;
 		memset(cj_cdev_l->head->data, 0, cj_cdev_l->dsize);
 		cj_cdev_l->total_size = 0;
+
+		filp->f_pos = 0;  /* reset the file position */
 		break;
-	case PRINT_CMD:
-		// print relevent data to a console
-		// TODO write to filp?
+	case CJ_READ_CMD:
+		/* TODO */
 		break;
 	default:
 		ret = -1;
