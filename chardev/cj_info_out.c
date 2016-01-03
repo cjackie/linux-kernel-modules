@@ -45,7 +45,8 @@ int main(int argc, const char* argv[]) {
   char *data = malloc(sizeof(char)*max_s);
   long cdsize;
   long total_size;
-  int ret;
+  // let default be error. If it is written to 0, that means it succeeded
+  int ret = -1;                               
 
   struct pcmd_arg buf = {
     .li = index,
@@ -58,13 +59,8 @@ int main(int argc, const char* argv[]) {
 
   // obtaining data and printing it out
   ioctl(dev_fd, CJ_READ_CMD, &buf);
-  if (ret) {
-    if (ret == CJ_NES)
-      printf("no enough space for getting data from the kernel space\n");
-    else
-      printf("unknown error?!\n");
-  } else {
-    printf("getting data from user successfully");
+  if (!ret) {
+    printf("there is an error when getting the data\n");
   }
   printf(" total_size: %li\n cdsize: %li\n data: \n--------\n%s\n---------\n", 
 	 total_size, cdsize, buf.data);

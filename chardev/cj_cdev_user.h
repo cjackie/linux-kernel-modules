@@ -6,8 +6,6 @@
 #define CJ_CLEANUP_CMD 1
 #define CJ_READ_CMD 2
 
-#define CJ_NES -2                           // for ret in pcmd_arg. no enough space
-
 struct pcmd_arg {
 	unsigned int li;                    // index of list of cj_list
 	char *data;                         // data that elm holds
