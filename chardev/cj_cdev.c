@@ -28,6 +28,15 @@ static int d_open(struct inode *inode, struct file *filp)
 		printk(KERN_ERR "error when finding cdev?\n");
 		ret = -1;
 	}
+
+#ifdef CJ_DEBUG
+	printk(KERN_INFO "cj_cdev initail_info:\n");
+	printk(KERN_INFO "head: %p, dsize: %ld, cdsize: %ld\n",
+	       my_cj_cdev->head, my_cj_cdev->dsize, my_cj_cdev->total_size);
+	printk(KERN_INFO "cj_list: \n----\n next:%p\n dsize:%ld\n cdsize:%ld\n data:%s\n----\n",
+	       my_cj_cdev->head->next, my_cj_cdev->head->dsize, my_cj_cdev->head->cdsize, 
+	       my_cj_cdev->head->data);
+#endif
 	return ret;
 }
 
@@ -268,6 +277,15 @@ static long d_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		break;
 
 	case CJ_READ_CMD:
+#ifdef CJ_DEBUG
+		printk(KERN_INFO "cj_cdev initail_info:\n");
+		printk(KERN_INFO "head: %p, dsize: %ld, cdsize: %ld\n",
+		       my_cj_cdev->head, my_cj_cdev->dsize, my_cj_cdev->total_size);
+		printk(KERN_INFO "cj_list: \n----\n next:%p\n dsize:%ld\n cdsize:%ld\n data:%s\n----\n",
+		       my_cj_cdev->head->next, my_cj_cdev->head->dsize, my_cj_cdev->head->cdsize, 
+		       my_cj_cdev->head->data);
+#endif
+
 		arg_ptr = kmalloc(sizeof(struct pcmd_arg), GFP_KERNEL);
 		if (copy_from_user(arg_ptr, (void *)arg, sizeof(struct pcmd_arg))) {
 			printk(KERN_ERR "can not copy pcmd_arg from the user space\n");

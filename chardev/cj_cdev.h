@@ -1,6 +1,9 @@
 #ifndef MY_CDEV_H
 #define MY_CDEV_H
 
+// uncomment to enable dubug info
+#define CJ_DEBUG                 
+
 struct cj_list {
 	struct cj_list *next;    /* pointing to the next element */
 	long dsize;              /* max size of the data */

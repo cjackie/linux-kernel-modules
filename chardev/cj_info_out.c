@@ -16,7 +16,7 @@ int main(int argc, const char* argv[]) {
   unsigned int max_s;
   int index;
   char *dev_fp = "/dev/cj";            // device file path
-  if (argc != 2 || argc != 3) {
+  if (argc != 2 && argc != 3) {
     printf("usage: cj_info_out index [max_size]\n");
     return -1;
   } 
