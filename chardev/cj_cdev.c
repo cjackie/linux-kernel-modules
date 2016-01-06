@@ -263,11 +263,14 @@ static long d_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	switch (cmd) {
 	case CJ_CLEANUP:
 		// clean up the buffer in memory, and restore to the initial state
-		for (lptr = cj_cdev_l->head->next; !lptr; lptr = next) {
+		lptr = cj_cdev_l->head->next;
+		while (lptr) {
 			kfree(lptr->data);
 			next = lptr->next;
 			kfree(lptr);
+			lptr = next;
 		}
+
 		cj_cdev_l->head->cdsize = 0;
 		cj_cdev_l->head->next = NULL;
 		memset(cj_cdev_l->head->data, 0, cj_cdev_l->dsize);
@@ -411,12 +414,12 @@ error:
 
 static void __exit my_cdev_cleanup(void)
 {
-	struct cj_list *l_ptr;
+	struct cj_list *lptr;
 	struct cj_list *next;
-	for (l_ptr = my_cj_cdev->head; !l_ptr; l_ptr = next) {
-		kfree(l_ptr->data);
-		next = l_ptr->next;
-		kfree(l_ptr);
+	for (lptr = my_cj_cdev->head; lptr; lptr = next) {
+		kfree(lptr->data);
+		next = lptr->next;
+		kfree(lptr);
 	}
 	unregister_chrdev_region(my_cj_cdev->cdev.dev, 1);
 	kfree(my_cj_cdev);
