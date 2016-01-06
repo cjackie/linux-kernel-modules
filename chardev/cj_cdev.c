@@ -261,7 +261,7 @@ static long d_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	long data_size = 0;
 	int index = 0;
 	switch (cmd) {
-	case CJ_CLEANUP_CMD:
+	case CJ_CLEANUP:
 		// clean up the buffer in memory, and restore to the initial state
 		for (lptr = cj_cdev_l->head->next; !lptr; lptr = next) {
 			kfree(lptr->data);
@@ -276,7 +276,7 @@ static long d_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		filp->f_pos = 0;  /* reset the file position */
 		break;
 
-	case CJ_READ_CMD:
+	case CJ_READ:
 #ifdef CJ_DEBUG
 		printk(KERN_INFO "cj_cdev initail_info:\n");
 		printk(KERN_INFO "head: %p, dsize: %ld, cdsize: %ld\n",
