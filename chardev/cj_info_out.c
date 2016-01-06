@@ -58,9 +58,9 @@ int main(int argc, const char* argv[]) {
   };
 
   // obtaining data and printing it out
-  ioctl(dev_fd, CJ_READ, &buf);
-  if (!ret) {
-    printf("there is an error when getting the data\n");
+  ret = ioctl(dev_fd, CJ_CLEANUP, &buf);
+  if (ret) {
+    printf("there is an error when getting the data. ret: %d\n", ret);
   }
   printf(" total_size: %li\n cdsize: %li\n data: \n--------\n%s\n---------\n", 
 	 total_size, cdsize, buf.data);

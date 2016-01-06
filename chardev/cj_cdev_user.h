@@ -3,9 +3,6 @@
 
 #include <asm/ioctl.h>
 
-#define CJ_CLEANUP_CMD 1
-#define CJ_READ_CMD 2
-
 struct pcmd_arg {
 	unsigned int li;                    // index of list of cj_list
 	char *data;                         // data that elm holds
@@ -15,11 +12,8 @@ struct pcmd_arg {
 	int *ret;                           // return value. 0 for success. 
 };
 
-// for issuing ioctl
-#define CJ_MAGIC 'j'
-
 // buf should be a pointer to pcmd_arg
-#define CJ_CLEANUP   _IO(CJ_MAGIC, CJ_CLEANUP_CMD)
-#define CJ_READ   _IOR(CJ_MAGIC, CJ_READ_CMD, void*)
+#define CJ_CLEANUP   _IO('j', 1)
+#define CJ_READ   _IOR('j', 2, void*)
 
 #endif /* MY_CDEV_USER_H */
