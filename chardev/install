@@ -1,5 +1,9 @@
 #!/bin/sh
 
+# fetching current time, to avoid messing git commits.
+# put it here, because I forget to many times.
+ntpdate time.nist.gov
+
 module="cj_cdev"
 device="cj"
 mode="664"
