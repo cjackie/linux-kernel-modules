@@ -15,7 +15,7 @@ MODULE_LICENSE("MIT");
 MODULE_AUTHOR("Chaojie Wang");
 MODULE_DESCRIPTION("playing around with kernel");
 
-#define D_TMP 
+// #define CJ_D_TMP 
 
 static struct cj_cdev *my_cj_cdev;
 static const char *mod_name = "cj_cdev";
@@ -89,15 +89,13 @@ static ssize_t d_read(struct file *filp, char __user *buf, size_t len, loff_t *p
 		remain_space -= dsize;
 		relative_pos -= dsize;
 		lptr = lptr->next;
-#ifdef D_TMP
-		printk("dsize : %li\n", dsize);
-		n_read = 0;
-		goto out;
+#ifdef CJ_D_TMP
+		// mmm
 #endif
 	}
 
 	// go to the relative position in that elm
-	remain_space -= (relative_pos+1);
+	remain_space -= relative_pos;
 	remain_space = remain_space > 0 ? remain_space : 0;
 	relative_pos = 0;
 	
@@ -115,7 +113,7 @@ static ssize_t d_read(struct file *filp, char __user *buf, size_t len, loff_t *p
 		len -= chuck_len;
 		relative_pos = chuck_len + relative_pos >= dsize ? 0 : chuck_len + relative_pos;
 		lptr = relative_pos == 0 ? lptr->next : lptr;
-#ifdef DEBUG
+#ifdef CJ_DEBUG
 		if (len < 0 || remain_space < 0) {
 			printk(KERN_ERR "len or remain_space is invalid. len is %li, remain_space is %li\n",
 			       len, remain_space);
