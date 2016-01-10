@@ -1,7 +1,7 @@
 #ifndef CJ_CDEV_PIPE_H
 #define CJ_CDEV_PIPE_H
 
-// for debug
+/* for debug */
 #define CJ_DEBUG 
 
 /* circular buffer */

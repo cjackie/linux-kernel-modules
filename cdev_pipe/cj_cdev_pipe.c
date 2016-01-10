@@ -13,17 +13,95 @@
 #include <linux/uaccess.h>
 #include <linux/semaphore.h>
 #include <linux/errno.h>
+#include <linux/wait.h>
+
+#include <asm/atomic.h>
+
 #include "cj_cdev_pipe"
 
+#define cj_isfull(cbuf)  (cbuf->wp == cbuf->rp && cbuf->buffer_size != 0)
+#define cj_isempty(cbuf)  (cbuf->wp == cbuf->rp && cbuf->buffer_size == 0) /* can be simplified? */
+/* maximum number of processes permitted to access our device */
+#define MAX_NUM_PROCS 10 
+/* our data structure */
 static struct cj_cbuf *cj_cbuf;
-static int init_err;
+/* current number of processes that has access to our device  */
+static atomic_t cj_nprocs = ATOMIC_INIT(MAX_NUM_PROCS-1);
+
+
+static int cj_open(struct inode *inode, struct file *filp) 
+{
+	printk(KERN_INFO "open is invoked\n");
+
+	if (atomic_add_negative(-1, &cj_nprocs)) {
+		atomic_inc(&cj_nprocs);
+		return -EBUSY;
+	}
+	
+	flip->private_data = cj_cbuf;
+	return 0;
+}
+
+static int cj_release(struct inode *inode, struct file *filp)
+{
+	printk(KERN_INFO "release is invoked\n");
+	atomic_dec(&cj_nprocs);
+	return 0;
+}
+
+ssize_t cj_read(struct file *filp, char __user *buf, size_t len, loff_t *pos)
+{
+	struct cj_cbuf *cbuf = filp->private_data;
+	
+	down(&cbuf->sem);
+	while (cj_isempty(cbuf)) {
+		up(&cbuf->sem);
+
+		/* if it is in NON-BLOCKING mode */
+		if (filp->f_flags & O_NONBLOCK) {
+			return -EAGAIN;
+		}
+
+		if (wait_event_interruptible(&cbuf->rwait, !cj_isempty(cbuf))) {
+			printk(KERN_ERR "interrupted when wait for cond(1)\n");
+			return -ERESTARTSYS;
+		}
+		down(&cbuf->sem);
+	}
+
+	int ret = 0;
+	int copy_len;
+	if (rp < wp) 
+		copy_len = min(cbuf->wp - cbuf->rp, len);
+	else 
+		copy_len = min(cbuf->end - cbuf->rp + sizeof(char), len);
+
+	ret = copy_to_user(buf, cbuf->rp, copy_len);
+	if (ret) {
+		up(&cbuf->sem);
+		printk(KERN_ERR "error on copying data over to the user\n");
+		/* invalid exchange */
+		return -EBADE;
+	}
+
+out:
+	cbuf->rp += sizeof(char) * copy_len;
+#ifdef CJ_DEBUG
+	if (cbuf->rp + sizeof(char) > cbuf->end)
+		printk(KERN_ERR "how come? read pointer is over the bound!\n");
+#endif
+	cbuf->rp = (cbuf->rp > cbuf->end) ? cbuf->begin : cbuf->rp;   	       /* wrap the pointer if needed */
+	up(&cbuf->sem);
+	return copy_len;
+}
+
 
 static const struct file_operations cj_cbuf_op = {
 	.owner = THIS_MODULE,
 	.open = cj_open,
 	.read = cj_read,
 	.write = cj_write,
-	.poll = cj_poll;
+	.poll = cj_poll,
 	.release = cj_release,
 	.unlocked_ioctl = cj_ioctl,
 };
@@ -52,7 +130,7 @@ static int __init cdev_setup(void)
 		goto error;
 	}
 
-	// allocate cdev and add it to the kernel
+	/* allocate cdev and add it to the kernel */
 	cdev_init(&cj_cbuf->cdev, &cj_cbuf_op);
 	ret = cdev_add(&cj_cbuf->cdev, dev, 1);
 	if (ret) {
@@ -61,14 +139,14 @@ static int __init cdev_setup(void)
 		goto error;
 	}
 
-	// init semaphore
+	/* init semaphore */
 	sema_init(&cj_cbuf->sem, 1);
 	
-	// init wait queue
+	/* init wait queue */
 	init_waitqueue_head(&cj_cbuf->rwait);
 	init_waitqueue_head(&cj_cbuf->wwait);
 
-	// init buffer and rest
+	/* init buffer and rest */
 	cj_cbuf->begin = kmalloc(sizeof(char)*buffer_size, GFP_KERNEL);
 	if (!cj_cbuf->begin) {
 		printk(KERN_ERR "can not allocate cj_cbuf->begin\n");
@@ -84,14 +162,16 @@ static int __init cdev_setup(void)
 
 	return ret;
 error:
-	init_err = -1;
 	return ret;
 }
 
 static void __exit cdev_cleanup(void)
 {
 	kfree(cj_cbuf->begin);
+	unregister_chardev_region(cj_cbuf->cdev, 1);
 	kfree(cj_cbuf);
+	printk(KERN_INFO "free and exiting\n");
+	return;
 }
 
 module_init(cdev_setup);
