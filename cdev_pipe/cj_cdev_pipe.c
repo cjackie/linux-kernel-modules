@@ -21,6 +21,15 @@
 
 #define cj_isfull(cbuf)  (cbuf->wp == cbuf->rp && cbuf->buffer_size != 0)
 #define cj_isempty(cbuf)  (cbuf->wp == cbuf->rp && cbuf->buffer_size == 0) /* can be simplified? */
+
+/* not used.. */
+#define cj_outbound(rwptr, endptr) ({     \
+	int __ret = 0;                    \
+	if (rwptr > endptr)               \
+		__ret = 1;                \
+	__ret;                            \
+})                                        \
+
 /* maximum number of processes permitted to access our device */
 #define MAX_NUM_PROCS 10 
 /* our data structure */
@@ -51,6 +60,8 @@ static int cj_release(struct inode *inode, struct file *filp)
 
 ssize_t cj_read(struct file *filp, char __user *buf, size_t len, loff_t *pos)
 {
+	printk(KERN_INFO "read is invoked\n");
+
 	struct cj_cbuf *cbuf = filp->private_data;
 	
 	down(&cbuf->sem);
@@ -71,10 +82,10 @@ ssize_t cj_read(struct file *filp, char __user *buf, size_t len, loff_t *pos)
 
 	int ret = 0;
 	int copy_len;
-	if (rp < wp) 
-		copy_len = min(cbuf->wp - cbuf->rp, len);
+	if (cbuf->rp < cbuf->wp) 
+		copy_len = min(cbuf->wp - cbuf->rp, sizeof(char)*len);
 	else 
-		copy_len = min(cbuf->end - cbuf->rp + sizeof(char), len);
+		copy_len = min(cbuf->end - cbuf->rp + sizeof(char), sizeof(char)*len);
 
 	ret = copy_to_user(buf, cbuf->rp, copy_len);
 	if (ret) {
@@ -85,22 +96,95 @@ ssize_t cj_read(struct file *filp, char __user *buf, size_t len, loff_t *pos)
 	}
 
 out:
-	cbuf->rp += sizeof(char) * copy_len;
+	cbuf->rp += sizeof(char)*copy_len;
 #ifdef CJ_DEBUG
 	if (cbuf->rp + sizeof(char) > cbuf->end)
 		printk(KERN_ERR "how come? read pointer is over the bound!\n");
 #endif
 	cbuf->rp = (cbuf->rp > cbuf->end) ? cbuf->begin : cbuf->rp;   	       /* wrap the pointer if needed */
 	up(&cbuf->sem);
+	wake_up_interruptible(&cbuf->wwait);                                   	/* wake up writing queue */
 	return copy_len;
 }
 
+static ssize_t cj_write(struct file *filp, const char __user *buf, size_t len, loff_t *pos) 
+{
+	printk(KERN_INFO "write is invoked\n");
+
+	struct cj_cbuf *cbuf = filp->private_data;
+	
+	donw(&cbuf->sem);
+	while (cj_isfull(cbuf)) {
+		up(&cbuf->sem);
+		
+		/* if it is in NON-BLOCKING mode */
+		if (filp->f_flags & O_NONBLOCK) {
+			return -EAGAIN;
+		}
+
+		if (wait_event_interruptible(&cbuf->wwait, !cj(cbuf))) {
+			printk(KERN_ERR "interrupted when wait for cond(2)\n");
+			return -ERESTARTSYS;
+		}
+		down(&cbuf->sem);
+	}
+
+	int ret;
+	int copy_len;
+	if (cbuf->wp < cbuf->rp) 
+		copy_len = min(cbuf->rp - cbuf->wp, sizeof(char)*len);
+	else
+		copy_len = min(cbuf->end - cbuf->wp + sizeof(char), sizeof(char)*len);
+	
+	if (copy_from_user(cbuf->wp, buf, copy_len)) {
+		up(&cbuf->sem);
+		printk(KERN_ERR "failed, copy from user\n");
+		return -ERESTART;
+	}
+
+	cbuf->wp += sizeof(char)*copy_len;
+#ifdef CJ_DEBUG
+	if (cbuf->wp > cbuf->end + sizeof(char)) {
+		printk(KERN_ERR "how come? write pointer is over the bound!\n");
+	}
+#endif
+	cbuf->wp = (cbuf->wp > cbuf->end) ? cbuf->begin : cbuf->wp;
+	wake_up_interruptible(&cbuf->rwait);
+	return copy_len;
+}
+
+unsigned int cj_poll(struct file *filp, struct poll_table_struct *table)
+{
+	prink(KERN_INFO "poll is invoked\n");
+
+	struct cj_cbuf *cbuf = filp->private_data;
+
+	unsigned int mask = 0;
+	poll_wait(filp, cbuf->wwait, table); /* poll_wait does not block? */
+	poll_wait(filp, cbuf->rwait, table);  
+
+	down(&cbuf->sem);
+	if (!cj_isfull(cbuf)) 
+		mask |= POLLIN | POLLRDNORM;
+	if (!cj_isempty(cbuf))
+		mask |= POLLOUT | POLLWRNORM;
+	up(&cbuf->sem);
+	return mask;
+}
+
+static long cj_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) 
+{
+	printk(KERN_INFO "ioctl is invoked\n");
+	/* TODO */
+	return 0;
+}
 
 static const struct file_operations cj_cbuf_op = {
 	.owner = THIS_MODULE,
 	.open = cj_open,
 	.read = cj_read,
 	.write = cj_write,
+	.llseek = no_llseek,
 	.poll = cj_poll,
 	.release = cj_release,
 	.unlocked_ioctl = cj_ioctl,
@@ -109,9 +193,9 @@ static const struct file_operations cj_cbuf_op = {
 static int __init cdev_setup(void)
 {
 	printk(KERN_INFO "set up the cdev\n");
+	int total_size = 512;
 
 	char mod_name = "cjdev_pipe";               
-	int buffer_size = 512;                      
 	dev_t dev;
 	int ret;
 
@@ -153,8 +237,8 @@ static int __init cdev_setup(void)
 		ret = -1;
 		goto error;
 	}
-	cj_cbuf->end = cj_cbuf->begin + sizeof(char)*(buffer_size-1);
-	cj_cbuf->buffer_size = buffer_size;
+	cj_cbuf->end = cj_cbuf->begin + sizeof(char)*(total_size-1);
+	cj_cbuf->buffer_size = 0;
 	cj_cbuf->rp = cj_cbuf->begin;
 	cj_cbuf->wp = cj_cbuf->begin;
 	cj_cbuf->nreaders = 0;
