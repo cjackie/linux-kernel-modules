@@ -12,6 +12,46 @@
 #include <math.h>
 #include <errno.h>
 #include <string.h>
+#include <signal.h>
+#include <sys/types.h>
+
+/**
+ *  for parent process to handle quiting signals
+ */
+void pr_signal_handler(int signum) {
+  switch (signum) {
+  case SIGTERM:
+  case SIGINT:
+  case SIGQUIT:
+  case SIGHUP:
+    /* pass the signal to child processes */
+    kill(0, signum);
+    exit(-1);
+    break;
+  default:
+    printf("parent is getting %d\n", signum);
+  }
+}
+
+/**
+ *  for child processes to handle quiting signals
+ */
+void ch_signal_handler(int signum) {
+  switch (signum) {
+  case SIGTERM:
+  case SIGINT:
+  case SIGQUIT:
+  case SIGHUP:
+    /* quiting signal */
+    exit(-1);
+    break;
+  default:
+    printf("signal %d is sent to process %d\n", signum, getpid());
+  }
+}
+
+
+static struct sigaction action;
 
 /**
  *  calculate a reasonable maximum time interval for a ps to do something.
@@ -61,13 +101,33 @@ int main(int argc, const char *argv[]) {
     }
     
     if (!ret_pid) {
-      /* child process */
-      ps_t = (nf < n_wrps) ? WRITE_PS : READ_PS;
-      my_num = nf;
       /* set the pipe on child side*/
       close(pipefd[0]);
       close(1);
       dup2(pipefd[1], 1);
+
+
+      /* child process */
+      ps_t = (nf < n_wrps) ? WRITE_PS : READ_PS;
+      my_num = nf;
+
+      /* register signal handler */
+      action.sa_handler = ch_signal_handler;
+      if (sigemptyset(&action.sa_mask) < 0) {
+	printf("set signal failed?\n");
+      }
+      action.sa_flags = 0;
+    
+      if (sigaction(SIGTERM, &action, NULL) < 0) 
+	printf("register SIGTERM failed\n");
+      if (sigaction(SIGINT, &action, NULL) < 0) 
+	printf("register SIGINT failed\n");
+      if (sigaction(SIGQUIT, &action, NULL) < 0) 
+	printf("register SIGQUIT failed\n");
+      if (sigaction(SIGHUP, &action, NULL) < 0) 
+	printf("register SIGHUP failed\n");
+
+
       break;
     }
   }
@@ -76,6 +136,24 @@ int main(int argc, const char *argv[]) {
     /* parent process. hang in there for getting data */
     close(pipefd[1]);
 
+    /* register signal handler */
+    action.sa_handler = pr_signal_handler;
+    if (sigemptyset(&action.sa_mask) < 0) {
+      printf("set signal failed?\n");
+    }
+    action.sa_flags = 0;
+    
+    if (sigaction(SIGTERM, &action, NULL) < 0) 
+      printf("register SIGTERM failed\n");
+    if (sigaction(SIGINT, &action, NULL) < 0) 
+      printf("register SIGINT failed\n");
+    if (sigaction(SIGQUIT, &action, NULL) < 0) 
+      printf("register SIGQUIT failed\n");
+    if (sigaction(SIGHUP, &action, NULL) < 0) 
+      printf("register SIGHUP failed\n");
+
+
+    /* listening for input from child processes */
     const int buf_size = 512;
     char buf[buf_size+1];
     memset(buf, 0, buf_size+1);
@@ -111,6 +189,7 @@ int main(int argc, const char *argv[]) {
     if (n_itr >= max_n_itr)
       break;
 
+    /* TODO t_intval should be random generated */
     if (time(NULL) - time_p > t_intval) {
       time_p = time(NULL);
 
