@@ -14,10 +14,12 @@
 #include <linux/semaphore.h>
 #include <linux/errno.h>
 #include <linux/wait.h>
+#include <linux/sched.h>
+#include <linux/poll.h>
 
 #include <asm/atomic.h>
 
-#include "cj_cdev_pipe"
+#include "cj_cdev_pipe.h"
 
 #define cj_isfull(cbuf)  (cbuf->wp == cbuf->rp && cbuf->buffer_size != 0)
 #define cj_isempty(cbuf)  (cbuf->wp == cbuf->rp && cbuf->buffer_size == 0) /* can be simplified? */
@@ -47,7 +49,7 @@ static int cj_open(struct inode *inode, struct file *filp)
 		return -EBUSY;
 	}
 	
-	flip->private_data = cj_cbuf;
+	filp->private_data = cj_cbuf;
 	return 0;
 }
 
@@ -73,7 +75,7 @@ ssize_t cj_read(struct file *filp, char __user *buf, size_t len, loff_t *pos)
 			return -EAGAIN;
 		}
 
-		if (wait_event_interruptible(&cbuf->rwait, !cj_isempty(cbuf))) {
+		if (wait_event_interruptible(cbuf->rwait, !cj_isempty(cbuf))) {
 			printk(KERN_ERR "interrupted when wait for cond(1)\n");
 			return -ERESTARTSYS;
 		}
@@ -83,9 +85,9 @@ ssize_t cj_read(struct file *filp, char __user *buf, size_t len, loff_t *pos)
 	int ret = 0;
 	int copy_len;
 	if (cbuf->rp < cbuf->wp) 
-		copy_len = min(cbuf->wp - cbuf->rp, sizeof(char)*len);
+		copy_len = min((int)(cbuf->wp - cbuf->rp), sizeof(char)*len);
 	else 
-		copy_len = min(cbuf->end - cbuf->rp + sizeof(char), sizeof(char)*len);
+		copy_len = min((int)(cbuf->end - cbuf->rp) + sizeof(char), sizeof(char)*len);
 
 	ret = copy_to_user(buf, cbuf->rp, copy_len);
 	if (ret) {
@@ -95,7 +97,7 @@ ssize_t cj_read(struct file *filp, char __user *buf, size_t len, loff_t *pos)
 		return -EBADE;
 	}
 
-out:
+
 	cbuf->rp += sizeof(char)*copy_len;
 #ifdef CJ_DEBUG
 	if (cbuf->rp + sizeof(char) > cbuf->end)
@@ -113,7 +115,7 @@ static ssize_t cj_write(struct file *filp, const char __user *buf, size_t len, l
 
 	struct cj_cbuf *cbuf = filp->private_data;
 	
-	donw(&cbuf->sem);
+	down(&cbuf->sem);
 	while (cj_isfull(cbuf)) {
 		up(&cbuf->sem);
 		
@@ -122,7 +124,7 @@ static ssize_t cj_write(struct file *filp, const char __user *buf, size_t len, l
 			return -EAGAIN;
 		}
 
-		if (wait_event_interruptible(&cbuf->wwait, !cj(cbuf))) {
+		if (wait_event_interruptible(cbuf->wwait, !cj_isfull(cbuf))) {
 			printk(KERN_ERR "interrupted when wait for cond(2)\n");
 			return -ERESTARTSYS;
 		}
@@ -132,9 +134,9 @@ static ssize_t cj_write(struct file *filp, const char __user *buf, size_t len, l
 	int ret;
 	int copy_len;
 	if (cbuf->wp < cbuf->rp) 
-		copy_len = min(cbuf->rp - cbuf->wp, sizeof(char)*len);
+		copy_len = min((int)(cbuf->rp - cbuf->wp), sizeof(char)*len);
 	else
-		copy_len = min(cbuf->end - cbuf->wp + sizeof(char), sizeof(char)*len);
+		copy_len = min((int)(cbuf->end - cbuf->wp) + sizeof(char), sizeof(char)*len);
 	
 	if (copy_from_user(cbuf->wp, buf, copy_len)) {
 		up(&cbuf->sem);
@@ -155,13 +157,13 @@ static ssize_t cj_write(struct file *filp, const char __user *buf, size_t len, l
 
 unsigned int cj_poll(struct file *filp, struct poll_table_struct *table)
 {
-	prink(KERN_INFO "poll is invoked\n");
+	printk(KERN_INFO "poll is invoked\n");
 
 	struct cj_cbuf *cbuf = filp->private_data;
 
 	unsigned int mask = 0;
-	poll_wait(filp, cbuf->wwait, table); /* poll_wait does not block? */
-	poll_wait(filp, cbuf->rwait, table);  
+	poll_wait(filp, &cbuf->wwait, table); /* poll_wait does not block? */
+	poll_wait(filp, &cbuf->rwait, table);  
 
 	down(&cbuf->sem);
 	if (!cj_isfull(cbuf)) 
@@ -195,7 +197,7 @@ static int __init cdev_setup(void)
 	printk(KERN_INFO "set up the cdev\n");
 	int total_size = 512;
 
-	char mod_name = "cjdev_pipe";               
+	char *mod_name = "cj_dev_pipe";               
 	dev_t dev;
 	int ret;
 
@@ -231,7 +233,7 @@ static int __init cdev_setup(void)
 	init_waitqueue_head(&cj_cbuf->wwait);
 
 	/* init buffer and rest */
-	cj_cbuf->begin = kmalloc(sizeof(char)*buffer_size, GFP_KERNEL);
+	cj_cbuf->begin = kmalloc(sizeof(char)*total_size, GFP_KERNEL);
 	if (!cj_cbuf->begin) {
 		printk(KERN_ERR "can not allocate cj_cbuf->begin\n");
 		ret = -1;
@@ -252,7 +254,7 @@ error:
 static void __exit cdev_cleanup(void)
 {
 	kfree(cj_cbuf->begin);
-	unregister_chardev_region(cj_cbuf->cdev, 1);
+	unregister_chrdev_region(cj_cbuf->cdev.dev, 1);
 	kfree(cj_cbuf);
 	printk(KERN_INFO "free and exiting\n");
 	return;
