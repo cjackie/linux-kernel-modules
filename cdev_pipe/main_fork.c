@@ -14,6 +14,7 @@
 #include <string.h>
 #include <signal.h>
 #include <sys/types.h>
+#include <fcntl.h>
 
 /**
  *  for parent process to handle quiting signals
@@ -64,7 +65,7 @@ static struct sigaction action;
 #define max_n_itr 10
 
 const static char *cdev_path = "";
-typedef enum my_ps_t {
+enum my_ps_t {
   WRITE_PS,
   READ_PS,
 };
@@ -75,8 +76,8 @@ int main(int argc, const char *argv[]) {
     return -1;
   }
 
-  n_wrps = atoi(argv[1]);
-  n_rdps = atoi(argv[2]);
+  int n_wrps = atoi(argv[1]);
+  int n_rdps = atoi(argv[2]);
 
   if (n_wrps == 0 || n_rdps == 0) {
     printf("at least 1 for both of read and write\n");
@@ -96,7 +97,7 @@ int main(int argc, const char *argv[]) {
   for (nf = 0; nf < n_wrps + n_rdps; ++nf) {
     ret_pid = fork();
     if (ret_pid < 0) {
-      print("can't fork any more?\n");
+      printf("can't fork any more?\n");
       break;
     }
     
@@ -161,7 +162,8 @@ int main(int argc, const char *argv[]) {
     while (1) {
       n_rd = read(pipefd[0], buf_size);
       if (n_rd > 0) {
-	print("%s", n_rd);
+	buf[n_rd] = '\0';
+	printf("%s", buf);
       }
     }
 
@@ -196,16 +198,16 @@ int main(int argc, const char *argv[]) {
       if (ps_t == WRITE_PS) {
 	ret = write(fd, out_s, 1);
 	if (ret == 1) 
-	  print("%d wrote %s\n", my_num, out_s);
+	  printf("%d wrote %s\n", my_num, out_s);
 	else 
-	  print("%d failed to write\n. ret: %d\n", my_num, ret);
+	  printf("%d failed to write\n. ret: %d\n", my_num, ret);
 
       } else {
 	ret = read(fd, out_s, 1);
 	if (ret == 1) 
-	  print("%d read %s\n", my_num, out_s);
+	  printf("%d read %s\n", my_num, out_s);
 	else 
-	  print("%d failed to read\n. ret: %d\n", my_num, ret);
+	  printf("%d failed to read\n. ret: %d\n", my_num, ret);
       }
       ++n_itr;
     }
