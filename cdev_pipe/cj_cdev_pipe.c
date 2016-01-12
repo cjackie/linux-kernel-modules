@@ -76,7 +76,7 @@ static int cj_open(struct inode *inode, struct file *filp)
 static int cj_release(struct inode *inode, struct file *filp)
 {
 	printk(KERN_INFO "release is invoked\n");
-	atomic_dec(&cj_nprocs);
+	atomic_inc(&cj_nprocs);
 	return 0;
 }
 
