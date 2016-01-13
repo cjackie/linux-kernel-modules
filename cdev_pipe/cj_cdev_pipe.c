@@ -32,7 +32,8 @@
 do {									\
 	printk(KERN_INFO "begin pointer: %p;end pointer: %p\n",		\
 	       cbuf->begin, cbuf->end);					\
-	printk(KERN_INFO "total_size: %d\n", cbuf->total_size);		\
+	printk(KERN_INFO "total_size: %d\n", cbuf->total_size);		\	
+        printk(KERN_INFO "current size: %d\n", cbuf->buffer_size);	\
 	char *tmp = kmalloc((cbuf->total_size+1)*sizeof(char), GFP_KERNEL); \
 	if (tmp == NULL) {						\
 		printk(KERN_INFO "allocation failed?!\n");		\
@@ -128,6 +129,7 @@ ssize_t cj_read(struct file *filp, char __user *buf, size_t len, loff_t *pos)
 		printk(KERN_ERR "how come? read pointer is over the bound!\n");
 #endif
 	cbuf->rp = (cbuf->rp > cbuf->end) ? cbuf->begin : cbuf->rp;   	       /* wrap the pointer if needed */
+	cbuf->buffer_size -= copy_len;
 	up(&cbuf->sem);
 	wake_up_interruptible(&cbuf->wwait);                                   	/* wake up writing queue */
 	return copy_len;
@@ -179,6 +181,7 @@ static ssize_t cj_write(struct file *filp, const char __user *buf, size_t len, l
 	}
 #endif
 	cbuf->wp = (cbuf->wp > cbuf->end) ? cbuf->begin : cbuf->wp;
+	cbuf->buffer_size += copy_len;
 	up(&cbuf->sem);
 	wake_up_interruptible(&cbuf->rwait);
 	return copy_len;
