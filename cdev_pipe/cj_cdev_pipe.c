@@ -98,7 +98,7 @@ ssize_t cj_read(struct file *filp, char __user *buf, size_t len, loff_t *pos)
 		if (filp->f_flags & O_NONBLOCK) {
 			return -EAGAIN;
 		}
-
+		
 		if (wait_event_interruptible(cbuf->rwait, !cj_isempty(cbuf))) {
 			printk(KERN_ERR "interrupted when wait for cond(1)\n");
 			return -ERESTARTSYS;
@@ -179,6 +179,7 @@ static ssize_t cj_write(struct file *filp, const char __user *buf, size_t len, l
 	}
 #endif
 	cbuf->wp = (cbuf->wp > cbuf->end) ? cbuf->begin : cbuf->wp;
+	up(&cbuf->sem);
 	wake_up_interruptible(&cbuf->rwait);
 	return copy_len;
 }
