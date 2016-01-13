@@ -1,0 +1,24 @@
+#!/bin/sh
+
+# fetching current time, to avoid messing git commits.
+# put it here, because I forget to many times.
+#ntpdate time.nist.gov
+
+module="cj_cdev_pipe"
+device="cj"
+mode="664"
+
+# install the module
+insmod ./${module}.ko 
+
+# find out the major number
+major=$(awk "\$2 == \"${module}\" {print \$1}" /proc/devices)
+
+# create devices
+mknod /dev/${device} c ${major} 0
+
+group="staff"
+grep -q '^staff:' /etc/group || group="wheel"
+
+chgrp $group /dev/${device}
+chmod $mode  /dev/${device}

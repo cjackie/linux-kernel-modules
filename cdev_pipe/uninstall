@@ -1,0 +1,6 @@
+#!/bin/sh
+
+device="cj"
+
+rmmod cj_cdev_pipe
+rm /dev/${device}

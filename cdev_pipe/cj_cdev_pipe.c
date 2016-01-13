@@ -24,6 +24,26 @@
 #define cj_isfull(cbuf)  (cbuf->wp == cbuf->rp && cbuf->buffer_size != 0)
 #define cj_isempty(cbuf)  (cbuf->wp == cbuf->rp && cbuf->buffer_size == 0) /* can be simplified? */
 
+/**
+ * for debuf purposes.
+ * @cbuf: a pointer to struct cj_cbuf.
+ */
+#define print_data_struct(cbuf)						\
+do {									\
+	printk(KERN_INFO "begin pointer: %p;end pointer: %p\n",		\
+	       cbuf->begin, cbuf->end);					\
+	printk(KERN_INFO "total_size: %d\n", cbuf->total_size);		\
+	char *tmp = kmalloc((cbuf->total_size+1)*sizeof(char), GFP_KERNEL); \
+	if (tmp == NULL) {						\
+		printk(KERN_INFO "allocation failed?!\n");		\
+		break;							\
+	}								\
+	strncpy(tmp, cbuf->begin, cbuf->total_size);			\
+	tmp[cbuf->total_size] = '\0';					\
+	printk(KERN_INFO "data: \n------\n%s\n------\n", tmp);		\
+	kfree(tmp);							\
+} while(0)
+
 /* not used.. */
 #define cj_outbound(rwptr, endptr) ({     \
 	int __ret = 0;                    \
@@ -65,7 +85,11 @@ ssize_t cj_read(struct file *filp, char __user *buf, size_t len, loff_t *pos)
 	printk(KERN_INFO "read is invoked\n");
 
 	struct cj_cbuf *cbuf = filp->private_data;
-	
+
+#ifdef CJ_DEBUG
+	print_data_struct(cbuf);
+#endif
+
 	down(&cbuf->sem);
 	while (cj_isempty(cbuf)) {
 		up(&cbuf->sem);
@@ -114,7 +138,11 @@ static ssize_t cj_write(struct file *filp, const char __user *buf, size_t len, l
 	printk(KERN_INFO "write is invoked\n");
 
 	struct cj_cbuf *cbuf = filp->private_data;
-	
+
+#ifdef CJ_DEBUG
+	print_data_struct(cbuf);
+#endif
+
 	down(&cbuf->sem);
 	while (cj_isfull(cbuf)) {
 		up(&cbuf->sem);
@@ -197,7 +225,7 @@ static int __init cdev_setup(void)
 	printk(KERN_INFO "set up the cdev\n");
 	int total_size = 512;
 
-	char *mod_name = "cj_dev_pipe";               
+	char *mod_name = "cj_cdev_pipe";               
 	dev_t dev;
 	int ret;
 
@@ -241,6 +269,7 @@ static int __init cdev_setup(void)
 	}
 	cj_cbuf->end = cj_cbuf->begin + sizeof(char)*(total_size-1);
 	cj_cbuf->buffer_size = 0;
+	cj_cbuf->total_size = total_size;
 	cj_cbuf->rp = cj_cbuf->begin;
 	cj_cbuf->wp = cj_cbuf->begin;
 	cj_cbuf->nreaders = 0;

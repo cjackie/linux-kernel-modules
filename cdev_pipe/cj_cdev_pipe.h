@@ -8,6 +8,7 @@
 struct cj_cbuf {
 	char *begin, *end;           /* begin and end of the buffer */
 	int buffer_size;             /* current size of the buffer */
+	int total_size;              /* total size of the buffer */
 	char *rp, *wp;               /* read pointer and write pointer */
 	int nreaders, nwriters;      /* number of readers and number of writers */
 	wait_queue_head_t rwait;     /* wait queue for readers */
