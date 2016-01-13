@@ -15,6 +15,9 @@
 #include <signal.h>
 #include <sys/types.h>
 #include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+
 
 /**
  *  for parent process to handle quiting signals
@@ -26,6 +29,7 @@ void pr_signal_handler(int signum) {
   case SIGQUIT:
   case SIGHUP:
     /* pass the signal to child processes */
+    printf("parent is getting %d\n", signum);
     kill(0, signum);
     exit(-1);
     break;
@@ -54,17 +58,10 @@ void ch_signal_handler(int signum) {
 
 static struct sigaction action;
 
-/**
- *  calculate a reasonable maximum time interval for a ps to do something.
- *  This is for testing purposes. The unit is seconds
- *  @n_ps: number of processes
- */
-#define max_itime(n_ps) ((n_ps)*5)
-
 /* number of iterations */
 #define max_n_itr 10
 
-const static char *cdev_path = "";
+const static char *cdev_path = "/dev/cj";
 enum my_ps_t {
   WRITE_PS,
   READ_PS,
@@ -104,10 +101,10 @@ int main(int argc, const char *argv[]) {
     if (!ret_pid) {
       /* set the pipe on child side*/
       close(pipefd[0]);
-      close(1);
       dup2(pipefd[1], 1);
 
-
+      printf("testing piping from process %d\n", getpid());
+      
       /* child process */
       ps_t = (nf < n_wrps) ? WRITE_PS : READ_PS;
       my_num = nf;
@@ -128,9 +125,12 @@ int main(int argc, const char *argv[]) {
       if (sigaction(SIGHUP, &action, NULL) < 0) 
 	printf("register SIGHUP failed\n");
 
-
       break;
+    } else {
+      printf("spawned process %d\n", ret_pid);
     }
+
+    
   }
 
   if (ps_t == -1) {
@@ -160,7 +160,7 @@ int main(int argc, const char *argv[]) {
     memset(buf, 0, buf_size+1);
     int n_rd = 0;
     while (1) {
-      n_rd = read(pipefd[0], buf_size);
+      n_rd = read(pipefd[0], buf, buf_size);
       if (n_rd > 0) {
 	buf[n_rd] = '\0';
 	printf("%s", buf);
@@ -171,43 +171,47 @@ int main(int argc, const char *argv[]) {
   }
 
   /* child processes */
-
-  int t_intval = max_itime(n_wrps+n_rdps);        /* actual number of process might be less than n_wrps+n_rdps */
   time_t time_p = time(NULL);                     /* previous time */
   int n_itr = 0;
 
-
-  int fd = open(cdev_path, O_WRONLY, 0);
+  int fd = open(cdev_path, O_RDWR, 0);
   if (fd < 0) {
     printf("%d: open can't it.\n error: %s\n", my_num, strerror(errno));
     return -1;
   }
-    
-  char out_s[2];
-  out_s[0] = (char)my_num + 'a';
-  out_s[1] = '\0';
-  int ret;
+  
+  int bufsize = 512;
+  char buf[bufsize];
+  int nbufsize = sprintf(buf, "writing from process %d\n", getpid()); /* actual len */
+  if (nbufsize > bufsize-1) {
+    printf("overflow, %d", getpid());
+    nbufsize = bufsize-1;
+  }
   while (1) {
     if (n_itr >= max_n_itr)
       break;
 
-    /* TODO t_intval should be random generated */
-    if (time(NULL) - time_p > t_intval) {
+    if (time(NULL) - time_p > 2) {
       time_p = time(NULL);
-
+      
+      int ret;
       if (ps_t == WRITE_PS) {
-	ret = write(fd, out_s, 1);
+	ret = write(fd, buf, nbufsize);
 	if (ret == 1) 
-	  printf("%d wrote %s\n", my_num, out_s);
+	  printf("%d wrote %s\n", getpid(), buf);
 	else 
-	  printf("%d failed to write\n. ret: %d\n", my_num, ret);
-
+	  printf("%d failed to write. ret is %d", getpid(), ret);
+	
+      } else if (ps_t == READ_PS) {
+	ret = read(fd, buf, bufsize);
+	if (ret  > 0) {
+	  buf[ret] = '\0';
+	  printf("%d read %s\n", getpid(), buf);
+	} else {
+	  printf("%d failed to read. error: %s\n", getpid(), strerror(errno));
+	}
       } else {
-	ret = read(fd, out_s, 1);
-	if (ret == 1) 
-	  printf("%d read %s\n", my_num, out_s);
-	else 
-	  printf("%d failed to read\n. ret: %d\n", my_num, ret);
+	printf("unknown ps_t %d\n", ps_t);
       }
       ++n_itr;
     }
