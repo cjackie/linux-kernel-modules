@@ -13,8 +13,10 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <assert.h>
+#include <string.h>
 
 #define MAX_THREAD_NUM 15
+#define ITR_NUM 20
 
 const char *cdev_path = "/dev/cj";
 
@@ -27,12 +29,33 @@ struct thread_data {
 void *io_cj(void *arg) {
   struct thread_data *data = (struct thread_data *) arg;
 
-  if (data->wr_thread) {
-    printf("I'm here to write data\n");
-  } else {
-    printf("I'm here to read data\n");
+  int fd = open(cdev_path, O_RDWR);
+  if (fd < 0) {
+    printf("thread %d can't open the file\n", data->unique);
+    return NULL;
   }
-
+  
+  int bufsize = 512;
+  char buf[bufsize];
+  int i;
+  int ret;
+  if (data->wr_thread) {
+    for (i = 0; i < ITR_NUM; ++i) {
+      ret = sprintf(buf, "hi, from thread %d\n", data->unique);
+      ret = write(fd, buf, ret);
+      if (ret <= 0) 
+	printf("thread %d failed to write data\n", data->unique);
+    }
+  } else {
+    for (i = 0; i < ITR_NUM; ++i) {
+      ret = read(fd, buf, bufsize-1);
+      buf[ret] = '\0';
+      if (ret > 0) 
+	printf("thread %d read \"%s\"\n", data->unique, buf);
+      else 
+	printf("thread %d failed to read data\n", data->unique);
+    }
+  }
   return NULL;
 }
 
@@ -70,5 +93,7 @@ int main(int argc, const char *argv[]) {
       printf("thread %d exiting\n", thread_i);
   }
   
+  free(threads);
+  free(thread_arg);
   return 0;
 }
