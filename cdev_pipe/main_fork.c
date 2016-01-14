@@ -17,7 +17,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
-
+#include <time.h>
 
 /**
  *  for parent process to handle quiting signals
@@ -197,7 +197,7 @@ int main(int argc, const char *argv[]) {
       int ret;
       if (ps_t == WRITE_PS) {
 	ret = write(fd, buf, nbufsize);
-	if (ret == 1) 
+	if (ret > 0) 
 	  printf("%d wrote %s\n", getpid(), buf);
 	else 
 	  printf("%d failed to write. ret is %d", getpid(), ret);
@@ -206,7 +206,7 @@ int main(int argc, const char *argv[]) {
 	ret = read(fd, buf, bufsize);
 	if (ret  > 0) {
 	  buf[ret] = '\0';
-	  printf("%d read %s\n", getpid(), buf);
+	  printf("%d read \"%s\"\n", getpid(), buf);
 	} else {
 	  printf("%d failed to read. error: %s\n", getpid(), strerror(errno));
 	}
