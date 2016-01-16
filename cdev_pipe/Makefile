@@ -8,6 +8,10 @@ obj-m := cj_cdev_pipe.o
 top: main_fork main_pthread
 	make -C $(KP) M=$(PWD) modules
 
+clean:                                                                          
+	rm main_fork main_pthread
+	make -C $(KP) M=$(PWD) clean                                        
+
 main_fork: main_fork.c
 	gcc $(CFLAG) -o main_fork main_fork.c
 
