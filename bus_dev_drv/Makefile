@@ -2,7 +2,7 @@ CC := gcc
 PWD := $(shell pwd)
 KP := /lib/modules/$(shell uname -r)/build
 
-obj-m += cj_bus.o cj_dev.o cj_drv.o
+obj-m += cj_dev_model.o cj_dev.o cj_drv.o
 
 build: 
 	make -C $(KP) M=$(PWD) modules

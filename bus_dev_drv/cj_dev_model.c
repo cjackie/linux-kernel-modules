@@ -9,12 +9,20 @@
 
 
 static int cj_bus_match(struct device *dev, struct device_driver *drv) {
-	/* don't know how to check. */
+	/* don't know what to check. */
 	/* according to kernel doc, we need to check if dev matches with drv
 	 * or not. 
 	 */
+	printk(KERN_INFO "cj_bus_match is invoked\n");
 	
-	return 1;
+	/* just perform a simple name checking */
+	if (!strcmp(dev->init_name, drv->name)) {
+		printk(KERN_INFO "name is not matched\n");
+		return 0;
+	}
+	printk(KERN_INFO "name is matched\n");
+  
+	return 1;		/* match */
 }
 
 struct bus_type cj_bus_type = {
@@ -44,7 +52,6 @@ static ssize_t cj_bus_store(struct bus_type *bus, const char *buf, size_t count)
  * this macro.
  */
 static BUS_ATTR("hello_file", 0666, cj_bus_show, cj_bus_store);
-
 
 
 /* bus device */
@@ -106,9 +113,6 @@ int register_cj_dev_drv(struct cj_dev_drv drv) {
 	drv->driver.resume = drv->resume;
 	drv->driver.bus = &cj_bus0;
 
-	/* TODO */
-	/* maybe create some attributes for this driver */
-	
 	return driver_register(&drv->driver);
 }
 EXPORT_SYMBOL(register_cj_dev_drv);
@@ -135,11 +139,11 @@ static int __init cj_bus_init(void) {
 		return -1;
 	}
 
-	/* TODO */
+	return 0;
 }
 
 static void __exit cj_bus_exit(void) {
-	/* TODO */
+	bus_unregister(&cj_bus_type);
 }
 
 module_init(cj_bus_init);
