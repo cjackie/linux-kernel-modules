@@ -32,18 +32,18 @@ struct bus_type cj_bus_type = {
 EXPORT_SYMBOL(cj_bus_type);
 
 /* an attribute */
-#define cj_bus_attr_store_data_size = 1024;
+#define cj_bus_attr_store_data_size 1024
 static char cj_bus_attr_store_data[cj_bus_attr_store_data_size];
 static ssize_t cj_bus_show(struct bus_type *bus, char *buf) {
 	ssize_t wrt_n = snprintf(buf, PAGE_SIZE, "hello from the cj_bus. extra info: %s", 
 		 cj_bus_attr_store_data);
-
 	return wrt_n;
 }
 
 static ssize_t cj_bus_store(struct bus_type *bus, const char *buf, size_t count){
 	memset(cj_bus_attr_store_data, 0, cj_bus_attr_store_data_size);
-	ssize_t rd_n = snprintf(buf, min(cj_bus_attr_store_data_size-1, count), "%s", buf);
+	ssize_t rd_n = snprintf(cj_bus_attr_store_data, 
+				min(cj_bus_attr_store_data_size-1, (int)count), "%s", buf);
 	return rd_n;
 }
 
@@ -51,8 +51,7 @@ static ssize_t cj_bus_store(struct bus_type *bus, const char *buf, size_t count)
  * cj_bus_type attributes. the name will be bus_attr_hello_file created by 
  * this macro.
  */
-static BUS_ATTR("hello_file", 0666, cj_bus_show, cj_bus_store);
-
+static BUS_ATTR(hello_file, 0666, cj_bus_show, cj_bus_store);
 
 /* bus device */
 struct device cj_bus0 = {
@@ -61,21 +60,21 @@ struct device cj_bus0 = {
 	.init_name = "cj_bus0"
 };
 EXPORT_SYMBOL(cj_bus0);
-		
 
 /**
- *  register a device under cj_bus0.
+ *  register a cj_dev under cj_bus0.
  *  @cj_dev, device
  *
  *  return 0 upon success? 
  */
 int cj_dev_register(struct cj_dev *cj_dev) {
-	printk("registering a new bus, with id: %d\n", bus.id);
+	printk("registering a cj_dev, with a name: %s\n", cj_dev->name);
 	
 	/* according to Linux/Documentation/driver-model/device.txt */
 	/* set up fields */
 	char *name = kmalloc(sizeof(char)*(strlen(cj_dev->name)+1), GFP_KERNEL);
 	if (name == NULL) {
+		printk(KERN_ERR "no mem\n");
 		return -1;
 	}
 	strcpy(name, cj_dev->name);
@@ -83,7 +82,7 @@ int cj_dev_register(struct cj_dev *cj_dev) {
 	cj_dev->dev.parent = &cj_bus0;
 	cj_dev->dev.bus = &cj_bus_type;
 	cj_dev->dev.init_name = name;
-	return device_register(cj_dev->dev);
+	return device_register(&cj_dev->dev);
 }
 EXPORT_SYMBOL(cj_dev_register);
 
@@ -94,23 +93,81 @@ void cj_dev_unregister(struct cj_dev *cj_dev) {
 	kfree(cj_dev->name);
 	cj_dev->name = NULL;
 	
-	device_unregister(cj_dev->dev);
+	device_unregister(&cj_dev->dev);
 }
 EXPORT_SYMBOL(cj_dev_unregister);
 
-int register_cj_dev_drv(struct cj_dev_drv drv) {
+
+static int cj_dev_drv_probe(struct device *dev) {
+	/*
+	 * additional checking on the device can be perform 
+	 * before pass it to cj_dev_drv one.
+	 */
+	struct cj_dev_drv *driver = to_cj_dev_drv(dev->driver);
+	struct cj_dev *device = to_cj_dev(dev);
+	if (driver == NULL || device == NULL) {
+		printk(KERN_ERR "in cj_dev_drv found NULL(1)?\n");
+		return -1;
+	}
+	return driver->probe(device);
+}
+
+static int cj_dev_drv_remove(struct device *dev) {
+	/*
+	 * additional checking on the device can be perform 
+	 * before pass it to cj_dev_drv one.
+	 */
+	struct cj_dev_drv *driver = to_cj_dev_drv(dev->driver);
+	struct cj_dev *device = to_cj_dev(dev);
+	if (driver == NULL || device == NULL) {
+		printk(KERN_ERR "in cj_dev_drv found NULL(2)?\n");
+		return -1;
+	}
+	return driver->remove(device);
+}
+
+static int cj_dev_drv_suspend(struct device *dev, pm_message_t state) {
+	/*
+	 * additional checking on the device can be perform 
+	 * before pass it to cj_dev_drv one.
+	 */
+	struct cj_dev_drv *driver = to_cj_dev_drv(dev->driver);
+	struct cj_dev *device = to_cj_dev(dev);
+	if (driver == NULL || device == NULL) {
+		printk(KERN_ERR "in cj_dev_drv found NULL(3)?\n");
+		return -1;
+	}
+	return driver->suspend(device, state);
+}
+
+static int cj_dev_drv_resume(struct device *dev) {
+	/*
+	 * additional checking on the device can be perform 
+	 * before pass it to cj_dev_drv one.
+	 */
+	struct cj_dev_drv *driver = to_cj_dev_drv(dev->driver);
+	struct cj_dev *device = to_cj_dev(dev);
+	if (driver == NULL || device == NULL) {
+		printk(KERN_ERR "in cj_dev_drv found NULL(4)?\n");
+		return -1;
+	}
+	return driver->resume(device);
+}
+
+int register_cj_dev_drv(struct cj_dev_drv *drv) {
 	if (drv == NULL) {
 		printk(KERN_ERR "drv is NULL\n");
 		return -1;
 	}
 
-	char *name = kmalloc(sizeof(char)*(strlen(drv.name)+1), GFP_KERNEL);
+	char *name = kmalloc(sizeof(char)*(strlen(drv->name)+1), GFP_KERNEL);
 	
 	drv->driver.name = name;
-	drv->driver.probe = drv->probe;
-	drv->driver.remove = drv->remove;
-	drv->driver.suspend = drv->suspend;
-	drv->driver.resume = drv->resume;
+	/* Type of the function is different! think about it... */
+	drv->driver.probe = cj_dev_drv_probe;
+	drv->driver.remove = cj_dev_drv_remove;
+	drv->driver.suspend = cj_dev_drv_suspend;
+	drv->driver.resume = cj_dev_drv_resume;
 	drv->driver.bus = &cj_bus0;
 
 	return driver_register(&drv->driver);

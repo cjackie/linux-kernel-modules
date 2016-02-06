@@ -6,7 +6,7 @@ static struct cj_dev cj_dev0 = {
 	.name = "cj_dev0"
 };
 
-static int __init cj_dev0_int(void) {
+static int __init cj_dev0_init(void) {
 	printk(KERN_INFO "cj_dev0_init is invoked\n");
 	
 	if (cj_dev_register(&cj_dev0)) {

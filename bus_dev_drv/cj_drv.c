@@ -14,12 +14,12 @@ static int my_remove(struct cj_dev *dev) {
 	return 0;
 }
 
-static int my_suspend(struct device * dev, pm_message_t state) {
+static int my_suspend(struct cj_dev * dev, pm_message_t state) {
 	printk("from the driver, suspend is invoked");
 	return 0;
 }
 
-static int my_resume(struct device * dev) {
+static int my_resume(struct cj_dev * dev) {
 	printk("from the driver, resume is invoked");
 	return 0;
 }
@@ -39,3 +39,6 @@ static int __init cj_dev0_driver_init(void) {
 static void __exit cj_dev0_driver_exit(void) {
 	unregister_cj_dev_drv(&cj_dev0_driver);
 }
+
+module_init(cj_dev0_driver_init);
+module_exit(cj_dev0_driver_exit);

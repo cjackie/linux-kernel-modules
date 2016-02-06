@@ -1,6 +1,8 @@
 #ifndef CJ_DEV_MODEL_H
 #define CJ_DEV_MODEL_H
 
+#include <linux/device.h>
+
 extern struct bus_type cj_bus_type;
 extern struct device cj_bus0;
 
@@ -13,8 +15,8 @@ struct cj_dev {
 	char *name;
 	struct device dev;
 };
+#define to_cj_dev(device) container_of(device, struct cj_dev, dev)
 
-#define to_cj_dev(dev) container_of(dev, struct cj_dev, dev)
 extern int cj_dev_register(struct cj_dev *cj_dev);
 extern void cj_dev_unregister(struct cj_dev *cj_dev);
 
@@ -29,13 +31,13 @@ extern void cj_dev_unregister(struct cj_dev *cj_dev);
  */
 struct cj_dev_drv {
 	char *name;
-	int (*probe) (struct cj_dev *cj_dev);
+	int (*probe) (struct cj_dev *dev);
 	int (*remove) (struct cj_dev *dev);
-	int (*suspend) (struct device * dev, pm_message_t state);
-	int (*resume) (struct device * dev);
+	int (*suspend) (struct cj_dev *dev, pm_message_t state);
+	int (*resume) (struct cj_dev *dev);
 	struct device_driver driver;
 };
-#define to_cj_dev_drv(dev) container_of(dev, struct cj_dev_drv, driver);
+#define to_cj_dev_drv(device_driver) container_of(device_driver, struct cj_dev_drv, driver);
 
 extern int register_cj_dev_drv(struct cj_dev_drv *drv);
 extern void unregister_cj_dev_drv(struct cj_dev_drv *drv);
