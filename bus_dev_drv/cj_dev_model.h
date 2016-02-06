@@ -4,7 +4,7 @@
 #include <linux/device.h>
 
 extern struct bus_type cj_bus_type;
-extern struct device cj_bus0;
+extern struct device cj_dev_root;
 
 /* kinda like inherent in OOP */
 /**

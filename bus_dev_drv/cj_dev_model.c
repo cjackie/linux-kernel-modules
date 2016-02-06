@@ -58,15 +58,15 @@ static ssize_t cj_bus_store(struct bus_type *bus, const char *buf, size_t count)
 static BUS_ATTR(hello_file, 0666, cj_bus_show, cj_bus_store);
 
 /* bus device */
-struct device cj_bus0 = {
+struct device cj_dev_root = {
 	.parent = NULL,
 	.bus = &cj_bus_type,
-	.init_name = "cj_bus0"
+	.init_name = "cj_dev_root"
 };
-EXPORT_SYMBOL(cj_bus0);
+EXPORT_SYMBOL(cj_dev_root);
 
 /**
- *  register a cj_dev under cj_bus0.
+ *  register a cj_dev under cj_dev_root.
  *  @cj_dev, device
  *
  *  return 0 upon success? 
@@ -83,7 +83,7 @@ int cj_dev_register(struct cj_dev *cj_dev) {
 	}
 	strcpy(name, cj_dev->name);
 
-	cj_dev->dev.parent = &cj_bus0;
+	cj_dev->dev.parent = &cj_dev_root;
 	cj_dev->dev.bus = &cj_bus_type;
 	cj_dev->dev.init_name = name;
 	cj_dev->dev.id = cj_dev->id;
@@ -92,7 +92,7 @@ int cj_dev_register(struct cj_dev *cj_dev) {
 EXPORT_SYMBOL(cj_dev_register);
 
 /**
- *  unregister a device under cj_bus0.
+ *  unregister a device under cj_dev_root.
  */
 void cj_dev_unregister(struct cj_dev *cj_dev) {
 	kfree(cj_dev->name);
@@ -198,6 +198,11 @@ static int __init cj_bus_init(void) {
 	if (bus_create_file(&cj_bus_type, &bus_attr_hello_file)) {
 		printk(KERN_ERR "failed to create a file\n");
 		bus_unregister(&cj_bus_type);
+		return -1;
+	}
+
+	if (device_register(&cj_dev_root)) {
+		printk(KERN_ERR "failed to register root of the device tree\n");
 		return -1;
 	}
 
