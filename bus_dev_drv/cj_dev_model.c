@@ -17,6 +17,16 @@ static int cj_bus_match(struct device *dev, struct device_driver *drv) {
 	 * or not. 
 	 */
 	printk(KERN_INFO "cj_bus_match is invoked\n");
+
+	if (dev == NULL || drv == NULL) {
+		printk(KERN_WARNING "dev or drv is NULL?\n");
+		return 0;
+	}
+
+	if (dev->init_name == NULL || drv->name == NULL) {
+		printk(KERN_WARNING "name in dev or drv is NULL?\n");
+		return 0;
+	}
 	
 	/* just perform a simple name checking */
 	if (!strcmp(dev->init_name, drv->name)) {
