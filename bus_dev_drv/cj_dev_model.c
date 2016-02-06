@@ -7,6 +7,9 @@
 
 #include "cj_dev_model.h"
 
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Chaojie Wang");
+MODULE_DESCRIPTION("playing around with kernel");
 
 static int cj_bus_match(struct device *dev, struct device_driver *drv) {
 	/* don't know what to check. */
@@ -168,7 +171,7 @@ int register_cj_dev_drv(struct cj_dev_drv *drv) {
 	drv->driver.remove = cj_dev_drv_remove;
 	drv->driver.suspend = cj_dev_drv_suspend;
 	drv->driver.resume = cj_dev_drv_resume;
-	drv->driver.bus = &cj_bus0;
+	drv->driver.bus = &cj_bus_type;
 
 	return driver_register(&drv->driver);
 }
