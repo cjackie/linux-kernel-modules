@@ -4,6 +4,7 @@
 
 static struct cj_dev cj_dev0 = {
 	.name = "cj_dev0"
+	.id = 0x01;
 };
 
 static int __init cj_dev0_init(void) {

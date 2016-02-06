@@ -13,6 +13,7 @@ extern struct device cj_bus0;
  */
 struct cj_dev {
 	char *name;
+	long id;
 	struct device dev;
 };
 #define to_cj_dev(device) container_of(device, struct cj_dev, dev)
