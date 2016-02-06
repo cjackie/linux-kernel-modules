@@ -176,6 +176,11 @@ int register_cj_dev_drv(struct cj_dev_drv *drv) {
 	}
 
 	char *name = kmalloc(sizeof(char)*(strlen(drv->name)+1), GFP_KERNEL);
+	if (name == NULL) {
+		printk(KERN_ERR "out of mem\n");
+		return -1;
+	}
+	strcpy(name, drv->name);
 	
 	drv->driver.name = name;
 	/* Type of the function is different! think about it... */
