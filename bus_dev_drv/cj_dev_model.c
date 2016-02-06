@@ -30,6 +30,7 @@ static int cj_bus_match(struct device *dev, struct device_driver *drv) {
 
 struct bus_type cj_bus_type = {
 	.name = "cj_bus",
+	.dev_name = "cj_bus",
 	.match = cj_bus_match
 };
 EXPORT_SYMBOL(cj_bus_type);
