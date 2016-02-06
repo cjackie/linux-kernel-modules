@@ -85,7 +85,7 @@ int cj_dev_register(struct cj_dev *cj_dev) {
 	cj_dev->dev.parent = &cj_bus0;
 	cj_dev->dev.bus = &cj_bus_type;
 	cj_dev->dev.init_name = name;
-	cj_dev->dev.id = cj_dev.id;
+	cj_dev->dev.id = cj_dev->id;
 	return device_register(&cj_dev->dev);
 }
 EXPORT_SYMBOL(cj_dev_register);
