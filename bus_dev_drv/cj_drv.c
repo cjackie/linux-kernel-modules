@@ -24,15 +24,19 @@ static int my_resume(struct cj_dev * dev) {
 	return 0;
 }
 
-static struct cj_dev_drv cj_dev0_driver = {
-	.name = "cj_dev0",
+static struct cj_dev_drv_op op = {
 	.probe = my_probe,
 	.remove = my_remove,
 	.suspend = my_suspend,
 	.resume = my_resume
 };
+static struct cj_dev_drv cj_dev0_driver;
 
 static int __init cj_dev0_driver_init(void) {
+	if (cj_dev_drv_init(&cj_dev0_driver, "cj_dev0", &op)) {
+		printk(KERN_ERR "can't register the driver");
+		return -1;
+	}
 	return register_cj_dev_drv(&cj_dev0_driver);
 }
 

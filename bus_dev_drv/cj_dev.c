@@ -2,13 +2,14 @@
 
 #include "cj_dev_model.h"
 
-static struct cj_dev cj_dev0 = {
-	.name = "cj_dev0",
-	.id = 0x01
-};
+static struct cj_dev cj_dev0;
 
 static int __init cj_dev0_init(void) {
 	printk(KERN_INFO "cj_dev0_init is invoked\n");
+	if (cj_dev_init(&cj_dev0, "cj_dev0", 1)) {
+		printk(KERN_ERR "failed to init cj_dev\n");
+		return -1;
+	}
 	
 	if (cj_dev_register(&cj_dev0)) {
 		printk(KERN_ERR "something went wrong when registering cj_dev0\n");

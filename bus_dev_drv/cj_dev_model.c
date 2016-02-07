@@ -24,7 +24,8 @@ static int cj_bus_match(struct device *dev, struct device_driver *drv) {
 	}
 
 	if (dev->init_name == NULL || drv->name == NULL) {
-		printk(KERN_WARNING "name in dev or drv is NULL?\n");
+		printk(KERN_WARNING "name in dev init name: %p\ndrv name is %p\n",
+		       dev->init_name, drv->name);
 		return 0;
 	}
 	
@@ -76,6 +77,29 @@ struct device cj_dev_root = {
 EXPORT_SYMBOL(cj_dev_root);
 
 /**
+ * initialize a cj_dev. 
+ * @cj_dev: the cj_dev being initialized
+ * @name: name for that cj_dev, will be used as an unique id
+ * @id: id... but not useful in this device.
+ *
+ * return 0 upon success
+ */
+int cj_dev_init(struct cj_dev *cj_dev, char *name, long id) {
+	memset(cj_dev, 0, sizeof(struct cj_dev));
+	char *cj_dev_name = kmalloc((strlen(name)+1)*sizeof(char), GFP_KERNEL);
+	if (cj_dev_name == NULL) {
+		printk(KERN_ERR "no mem\n");
+		return -1;
+	}
+	strcpy(cj_dev_name, name);
+	
+	cj_dev->name = cj_dev_name;
+	cj_dev->id = id;
+	return 0;
+}
+EXPORT_SYMBOL(cj_dev_init);
+
+/**
  *  register a cj_dev under cj_dev_root.
  *  @cj_dev, device
  *
@@ -124,7 +148,7 @@ static int cj_dev_drv_probe(struct device *dev) {
 		printk(KERN_ERR "in cj_dev_drv found NULL(1)?\n");
 		return -1;
 	}
-	return driver->probe(device);
+	return driver->op->probe(device);
 }
 
 static int cj_dev_drv_remove(struct device *dev) {
@@ -138,7 +162,7 @@ static int cj_dev_drv_remove(struct device *dev) {
 		printk(KERN_ERR "in cj_dev_drv found NULL(2)?\n");
 		return -1;
 	}
-	return driver->remove(device);
+	return driver->op->remove(device);
 }
 
 static int cj_dev_drv_suspend(struct device *dev, pm_message_t state) {
@@ -152,7 +176,7 @@ static int cj_dev_drv_suspend(struct device *dev, pm_message_t state) {
 		printk(KERN_ERR "in cj_dev_drv found NULL(3)?\n");
 		return -1;
 	}
-	return driver->suspend(device, state);
+	return driver->op->suspend(device, state);
 }
 
 static int cj_dev_drv_resume(struct device *dev) {
@@ -166,8 +190,30 @@ static int cj_dev_drv_resume(struct device *dev) {
 		printk(KERN_ERR "in cj_dev_drv found NULL(4)?\n");
 		return -1;
 	}
-	return driver->resume(device);
+	return driver->op->resume(device);
 }
+
+/**
+ * initialize a cj_dev_drv. call this before register the driver
+ * @drv: the driver being initialized
+ * @name: name of the driver
+ * @op: operation attached to the driver
+ */
+int cj_dev_drv_init(struct cj_dev_drv *drv, char *name, struct cj_dev_drv_op *op) {
+	char *drv_name = kmalloc((strlen(name)+1)*sizeof(char), GFP_KERNEL);
+	if (drv_name == NULL) {
+		printk(KERN_ERR "\n");
+		return -1;
+	}
+	strcpy(drv_name, name);
+
+	memset(drv, 0, sizeof(struct cj_dev_drv));
+	drv->name = drv_name;
+	drv->op = op;
+
+	return 0;
+}
+EXPORT_SYMBOL(cj_dev_drv_init);
 
 int register_cj_dev_drv(struct cj_dev_drv *drv) {
 	if (drv == NULL) {
@@ -197,7 +243,7 @@ EXPORT_SYMBOL(register_cj_dev_drv);
 void unregister_cj_dev_drv(struct cj_dev_drv *drv) {
 	kfree(drv->name);
 	drv->name = NULL;
-
+	
 	driver_unregister(&drv->driver);
 }
 EXPORT_SYMBOL(unregister_cj_dev_drv);
